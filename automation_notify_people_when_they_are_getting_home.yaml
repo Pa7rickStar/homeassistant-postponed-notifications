@@ -4,12 +4,10 @@ triggers:
   - entity_id: person.me
     zone: zone.home
     event: enter
-    id: Me
     trigger: zone
   - entity_id: person.wife
     zone: zone.home
     event: enter
-    id: Wife
     trigger: zone
   - trigger: state
     entity_id:

@@ -2,6 +2,7 @@
 Home Assistant scripts and automations to postpone mobile phone notifications and deliver them when the recipient returns home. Also create advanced (e.g. actionable) notifications within the visual editor.
 
 ## Features
+- [x] Change device information at only one location when people in your home change devices.
 - [ ] Create mobile app notifications in scripts and automations using the visual editor (without yaml):
   - [x] Basic notifications with `title`, `message` and `data`.
   - [x] [Actionable notifications](https://companion.home-assistant.io/docs/notifications/actionable-notifications):
@@ -33,6 +34,34 @@ Home Assistant scripts and automations to postpone mobile phone notifications an
 - [x] Deliver queued notifications when recipient returns home.
 - [x] Deliver notifications after user queued them for later delivery.
 
+
+## How to use
+- Add an action to a automation or script and select the notify script.
+![alt text](add_action.png)
+- Configure your notification using the visual editor.
+![alt text](notify_1.png)
+![alt text](notify_2.png)
+![alt text](notify_3.png)
+
+
+## How to get it working
+- Add the template sensor from [sensor_pending_notifications_when_away.yaml](sensor_pending_notifications_when_away.yaml) to your `configurations.yaml`.
+- Create a scipt with the content of [script_parallel_notification_helper.yaml](script_parallel_notification_helper.yaml)
+- Create a scipt with the content of [script_notify.yaml](script_notify.yaml). Make sure to change:
+  - `fields`:`people`:`options` add the names of your users here.
+  - Add the `device_id`s, names and device OS for those users to: `sequence`:`[1]`:`variables`:`users`
+- Create an automation with the content of [automation_notify_people_when_they_are_getting_home.yaml](automation_notify_people_when_they_are_getting_home.yaml).
+  - Make sure to change the triggers to represent your home:
+    - The automation should trigger when people come home.
+    - The automation should trigger regularly so notifications postponed by the user with the `Remind me later` button are delivered.
+    - I added an `input_button` helper to clear pending notifications in case something goes wrong. This is not needed since the action could be triggered from the automation editor or development tools too.
+  - Make sure to change the conditions for the second choose to represent your home:
+    - `{{ (as_timestamp(now()) - as_timestamp(state_attr("automation_notify_people_when_they_are_getting_home","last_triggered"))) | int(0) > 600 }}` makes sure the automation does not run when it was triggered within 5 minutes prior.
+    - The second condition avoids automation runs when there are no pending notifications. Duh...
+    - All the other conditions are specific to my home. If you don't have similar entities you can simply delete those conditions:
+      - I use the custom template sensor `binary_sensor.home_jemand_zuhause` as condition to any automation that should only run when someone is home.
+      - `input_boolean.home_state_gast_modus` is a helper so the `binary_sensor.home_jemand_zuhause` can set to `home` manually in case guests are staying at the house (without my wifes or mine phone present) and stuff like heating has to work.
+      - `input_boolean.home_state_schlafen` and `input_boolean.home_state_nsdr` will be set automatically when someone is sleeping so shades and stuff don't move unexpectedly
 
 ## Credits
 This project was inspired by [Simon42](https://www.simon42.com/home-assistant-zu-hause-benachrichtigen/). The scripts and ideas are heavily based on [Pending / Postponed notifications](https://community.home-assistant.io/t/pending-postponed-notifications/363234) by [RoboMagus](https://gist.github.com/RoboMagus/).

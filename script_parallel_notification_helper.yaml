@@ -113,10 +113,10 @@ sequence:
 
                 {% if not raw_data.postponed and not is_state('person.' ~
                 raw_data.person, 'home') %}
-                  {% set actions = actions | default([], true) + [{'action':postponed_action_name, 'title':'Zu Hause erinnern',}] %}
+                  {% set actions = actions | default([], true) + [{'action':postponed_action_name, 'title':'Remind me at home',}] %}
                 {% else %}
-                  {% set actions = actions | default([], true) + [{'action':later_action_name, 'title':'Später erinnern',}] %}
-                  {% set actions = actions | default([], true) + [{'action':tomorrow_action_name, 'title':'Morgen erinnern',}] %}
+                  {% set actions = actions | default([], true) + [{'action':later_action_name, 'title':'Remind me later',}] %}
+                  {% set actions = actions | default([], true) + [{'action':tomorrow_action_name, 'title':'Remind me tomorrow',}] %}
                 {% endif %}
 
                 {% if actions %}
