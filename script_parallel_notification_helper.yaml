@@ -1,0 +1,337 @@
+alias: Parallel Notification Helper
+description: Helper for sending notifications with Notify script.
+icon: mdi:view-parallel
+mode: parallel
+max: 50
+fields:
+  notify_target_device:
+    name: Notify Target Device
+  notify_data:
+    name: Notify Data
+sequence:
+  - choose:
+      - conditions:
+          - alias: >-
+              Person not found or person home or notification not postponed ➡️
+              sending notification
+            condition: or
+            conditions:
+              - alias: Person not found
+                condition: template
+                value_template: >
+                  {{ 'person.' ~ raw_data.person not in states.person |
+                  map(attribute='entity_id') | list }}
+              - alias: Person is home and send_earliest allready passed
+                condition: template
+                value_template: >
+                  {{ is_state('person.' ~ raw_data.person, 'home') and
+                  as_datetime(raw_data.send_earliest) <= now() }}
+                enabled: true
+              - alias: Notification not postponed and send_earliest allready passed
+                condition: template
+                value_template: >
+                  {{ raw_data.postponed is false and
+                  as_datetime(raw_data.send_earliest) <= now() }}
+        sequence:
+          - variables:
+              server: >-
+                {{ state_attr('zone.home', 'friendly_name').replace(' ', '_') +
+                '_' }}
+              os: >
+                {% if device_attr(target_device, 'manufacturer') == "Apple" %}
+                  iOS
+                {% elif device_attr(target_device, 'manufacturer') == "Google"
+                %}
+                  Android
+                {% endif %}
+              title: "{{ raw_data.title | default(None, true) }}"
+              message: "{{ raw_data.message | default('', true) }}"
+              subtitle: |
+                {% if raw_data.actionable %}
+                  {{ '❓ Actionable: ' + raw_data.subtitle if raw_data.subtitle else '❓ Actionable' }}
+                {% else %}
+                  {{ raw_data.subtitle if raw_data.subtitle else None }}
+                {% endif %}
+              confirm_action_name: |
+                {% if raw_data.confirm_text and raw_data.confirm_action %}
+                  {{'CONFIRM_' ~ context.id }}
+                {% endif %}
+              dismiss_action_name: |
+                {% if raw_data.dismiss_text and raw_data.dismiss_action %}
+                  {{'DISMISS_' ~ context.id }}
+                {% endif %}
+              postponed_action_name: |
+                {{'POSTPONED_' ~ context.id }}
+              later_action_name: |
+                {{'LATER_' ~ context.id }}
+              tomorrow_action_name: |
+                {{'TOMORROW_' ~ context.id }}
+              msg_data: >
+                {% set data = raw_data.data | default({}) %}
+
+                {% if raw_data.subtitle %}
+                  {% if os == "iOS" %}
+                    {% set data = dict({'subtitle':raw_data.subtitle}, **data) %}
+                  {% elif is == "Android" %}
+                    {% set data = dict({'subject':raw_data.subtitle}, **data) %}
+                  {% endif %}
+                {% endif %}
+
+                {% if raw_data.url %}
+                  {% if os == "iOS" %}
+                    {% set data = dict({'url':raw_data.url}, **data) %}
+                  {% elif is == "Android" %}
+                    {{ dict({'clickAction':'{{raw_data.url}}'}, **data) }}
+                  {% endif %}
+                {% endif %}
+
+                {% if raw_data.group %}
+                  {% set data = dict({'group':server + raw_data.group}, **data) %}
+                {% endif %}
+
+                {% if raw_data.tag %}
+                  {% set data = dict({'tag':raw_data.tag}, **data) %}
+                {% endif %}
+
+                {% if raw_data.shortcut and os == "iOS" %}
+                  {% if raw_data.shortcut_kwargs %}
+                    {% set data = dict({'shortcut':dict( {'name':raw_data.shortcut}, **shortcut_kwargs )}, **data) %}
+                  {% else %}
+                    {% set data = dict({'shortcut':{'name':raw_data.shortcut}}, **data) %}
+                  {% endif %}
+                {% endif %}
+
+                {% if raw_data.confirm_text and raw_data.confirm_action %}
+                  {% set actions = [{'action':confirm_action_name, 'title':raw_data.confirm_text}] %}
+                  {% set data = dict({'confirm_action':raw_data.confirm_action}, **data) %}
+                {% endif %}
+
+                {% if raw_data.dismiss_text and raw_data.dismiss_action %}
+                  {% set actions = actions + [{'action':dismiss_action_name, 'title':raw_data.dismiss_text,}] %}
+                  {% set data = dict({'dismiss_action':raw_data.dismiss_action}, **data) %}
+                {% endif %}
+
+                {% if not raw_data.postponed and not is_state('person.' ~
+                raw_data.person, 'home') %}
+                  {% set actions = actions | default([], true) + [{'action':postponed_action_name, 'title':'Zu Hause erinnern',}] %}
+                {% else %}
+                  {% set actions = actions | default([], true) + [{'action':later_action_name, 'title':'Später erinnern',}] %}
+                  {% set actions = actions | default([], true) + [{'action':tomorrow_action_name, 'title':'Morgen erinnern',}] %}
+                {% endif %}
+
+                {% if actions %}
+                  {% set data = dict({'actions':actions}, **data) %}
+                {% endif %}
+
+                {{data}}
+          - action: >-
+              notify.mobile_app_{{device_attr(target_device, 'name') | slugify
+              }}
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data: "{{ msg_data }}"
+          - alias: Wait for trigger if notification is actionable
+            if:
+              - condition: template
+                value_template: "{{ msg_data.actions is defined }}"
+                alias: Notification is actionable
+            then:
+              - alias: Wait for a response
+                wait_for_trigger:
+                  - event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ confirm_action_name }}"
+                    trigger: event
+                    alias: Confirm
+                  - event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ dismiss_action_name }}"
+                    trigger: event
+                    alias: Dismiss
+                  - event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ postponed_action_name }}"
+                    trigger: event
+                    alias: Postponed
+                  - event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ later_action_name }}"
+                    trigger: event
+                    alias: Later
+                  - event_type: mobile_app_notification_action
+                    event_data:
+                      action: "{{ tomorrow_action_name }}"
+                    trigger: event
+                    alias: Tomorrow
+                  - alias: Custom notification replacement event
+                    event_type: custom_notification_replacement_event
+                    event_data:
+                      tag: "{{ raw_data.tag }}"
+                    trigger: event
+                timeout:
+                  hours: 1
+                  minutes: 0
+                  seconds: 0
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ wait.trigger.event.data.action ==
+                          confirm_action_name }}
+                        alias: Confirm action triggered
+                    sequence:
+                      - action: "{{ raw_data.confirm_action[0].action }}"
+                        data: "{{ raw_data.confirm_action[0].data }}"
+                        target: "{{ raw_data.confirm_action[0].target }}"
+                        alias: Perform action
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ wait.trigger.event.data.action ==
+                          dismiss_action_name }}
+                        alias: Dismiss action triggered
+                    sequence:
+                      - action: "{{ raw_data.dismiss_action[0].action }}"
+                        data: "{{ raw_data.dismiss_action[0].data }}"
+                        target: "{{ raw_data.dismiss_action[0].target }}"
+                        alias: Perform action
+                  - conditions:
+                      - alias: Postponed action triggered
+                        condition: template
+                        value_template: >-
+                          {{ wait.trigger.event.data.action ==
+                          postponed_action_name }}
+                    sequence:
+                      - variables:
+                          updated_postponed: false
+                          appending_notification:
+                            target_device: "{{ target_device }}"
+                            raw_data: >-
+                              {{
+                              dict(dict(raw_data),**dict({'postponed':updated_postponed}))
+                              }}
+                          pending_notifications: >-
+                            {{
+                            (state_attr('sensor.pending_notifications_when_away',
+                            'list') | default([], true)) +
+                            [appending_notification]}}
+                      - event: set_entity_value
+                        event_data:
+                          entity_id: sensor.pending_notifications_when_away
+                          state: "{{ pending_notifications|length }}"
+                          attr:
+                            list: "{{ pending_notifications }}"
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ wait.trigger.event.data.action == later_action_name
+                          }}
+                        alias: Later action triggered
+                    sequence:
+                      - variables:
+                          updated_postponed: false
+                          updated_send_earliest: "{{ now() + timedelta(minutes=30) }}"
+                          appending_notification:
+                            target_device: "{{ target_device }}"
+                            raw_data: >-
+                              {{
+                              dict(dict(dict(raw_data),**dict({'send_earliest':updated_send_earliest})),**dict({'postponed':updated_postponed}))
+                              }}
+                          pending_notifications: >-
+                            {{
+                            (state_attr('sensor.pending_notifications_when_away',
+                            'list') | default([], true)) +
+                            [appending_notification]}}
+                      - event: set_entity_value
+                        event_data:
+                          entity_id: sensor.pending_notifications_when_away
+                          state: "{{ pending_notifications|length }}"
+                          attr:
+                            list: "{{ pending_notifications }}"
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ wait.trigger.event.data.action ==
+                          tomorrow_action_name }}
+                        alias: Tomorrow action triggered
+                    sequence:
+                      - variables:
+                          updated_postponed: false
+                          updated_send_earliest: "{{ today_at('11:00') + timedelta(days=1) }}"
+                          appending_notification:
+                            target_device: "{{ target_device }}"
+                            raw_data: >-
+                              {{
+                              dict(dict(dict(raw_data),**dict({'send_earliest':updated_send_earliest})),**dict({'postponed':updated_postponed}))
+                              }}
+                          pending_notifications: >-
+                            {{
+                            (state_attr('sensor.pending_notifications_when_away',
+                            'list') | default([], true)) +
+                            [appending_notification]}}
+                      - event: set_entity_value
+                        event_data:
+                          entity_id: sensor.pending_notifications_when_away
+                          state: "{{ pending_notifications|length }}"
+                          attr:
+                            list: "{{ pending_notifications }}"
+                  - conditions:
+                      - alias: Custom notification replacement event triggered
+                        condition: template
+                        value_template: "{{ wait.trigger.event.data.tag == raw_data.tag }}"
+                    sequence:
+                      - stop: >-
+                          custom_notification_replacement_event triggered
+                          cancellation of script run
+                          script.parallel_notification_helper.
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ not wait.completed }}"
+                        enabled: true
+                        alias: Clear notification due to timeout
+                    sequence:
+                      - action: >-
+                          notify.mobile_app_{{device_attr(target_device, 'name')
+                          | slugify }}
+                        data:
+                          message: clear_notification
+                          data:
+                            tag: "{{ raw_data.tag }}"
+                        alias: Clear notification
+            enabled: true
+      - conditions:
+          - alias: Person is not home
+            condition: template
+            value_template: "{{ not is_state('person.' ~ raw_data.person, 'home') }}"
+            enabled: true
+          - alias: Notification is postponed
+            condition: template
+            value_template: "{{ raw_data.postponed }}"
+            enabled: true
+        sequence:
+          - variables:
+              updated_subtitle: |
+                {% if raw_data.actionable %}
+                  {{ '❓🔁 ' + now().strftime('%d.%m. %H:%M Uhr') + ': ' + subtitle if subtitle else '❓🔁 ' + now().strftime('%d.%m. %H:%M Uhr') }}
+                {% else %}
+                  {{ '🔁 ' + now().strftime('%d.%m. %H:%M Uhr') + ': ' + subtitle if subtitle else '🔁 ' + now().strftime('%d.%m. %H:%M Uhr') }}
+                {% endif %}
+              updated_postponed: false
+              appending_notification:
+                target_device: "{{ target_device }}"
+                raw_data: >-
+                  {{ dict(dict(dict(raw_data),
+                  **dict({'subtitle':updated_subtitle})),**dict({'postponed':updated_postponed}))
+                  }}
+              pending_notifications: >-
+                {{ (state_attr('sensor.pending_notifications_when_away', 'list')
+                | default([], true)) + [appending_notification]}}
+          - event: set_entity_value
+            event_data:
+              entity_id: sensor.pending_notifications_when_away
+              state: "{{ pending_notifications|length }}"
+              attr:
+                list: "{{ pending_notifications }}"
+        alias: Person is not home and notification is postponed ➡️ appending list
+    enabled: true

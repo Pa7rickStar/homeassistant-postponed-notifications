@@ -1,0 +1,14 @@
+templates:
+- trigger:
+    - trigger: event
+      event_type: set_entity_value
+      event_data:
+        entity_id: sensor.pending_notifications_when_away
+  sensor:
+    - name: Pending notifications when away
+      unique_id: pending_notifications_when_away
+      unit_of_measurement: ""
+      icon: mdi:format-list-group
+      state: "{{ trigger.event.data.state }}"
+      attributes:
+        list: "{{ trigger.event.data.attr.list }}"

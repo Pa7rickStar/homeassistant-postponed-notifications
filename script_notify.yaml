@@ -1,0 +1,272 @@
+alias: Notify
+icon: mdi:notification-clear-all
+mode: parallel
+max: 10
+fields:
+  people:
+    selector:
+      select:
+        options:
+          - Me
+          - Wife
+        multiple: true
+    name: People
+    description: >-
+      People who should be notified. The corresponding device-ids are hardcoded
+      into this script!
+  title:
+    name: Title
+    description: Heading you can use in your notifications.
+    required: false
+    example: "'Notify Me' fiered"
+    selector:
+      text:
+        multiline: true
+  subtitle:
+    name: Subtitle
+    description: >-
+      Subtitles and subjects are secondary headings you can use in your
+      notifications beyond the title property.
+    required: false
+    advanced: false
+    example: Notifications are vital
+    selector:
+      text: {}
+  message:
+    name: Message
+    description: >-
+      Required. The message of your notification. Will be rendered "" when not
+      passed any value.
+    required: true
+    example: Hello world
+    selector:
+      text:
+        multiline: true
+  data:
+    name: Data
+    description: >-
+      Required. Additional notification data. Defaults to {}. There are many
+      options not implemented in this script. See
+      https://companion.home-assistant.io/docs/notifications for information.
+      Some Android examples:- entityId:<entity_ID>- noAction (If you prefer to
+      not open the app by default and instead donothing.)- app://<package name>
+    required: true
+    advanced: true
+    example: "url: '/lovelace'"
+    default: {}
+    selector:
+      object: {}
+  delivery_time:
+    selector:
+      select:
+        options:
+          - Notify immediately.
+          - Notify people when they are getting home.
+          - Request Location Update.
+    name: Time of notification delivery
+    required: true
+    default: Notify immediately.
+    description: >-
+      Select when the notification should be send. If "Request Location Update"
+      is selected, an update request without any message will be send
+      immediately.
+  tag:
+    name: Tag
+    description: >-
+      Recommended for actionable notifications! Replace an existing notification
+      by using a tag for the notification. All subsequent notifications will
+      take the place of a notification with the same tag. Scripts waiting for an
+      action from a replaced notification will be stopped. This is also used to
+      clear notifications from mobile devices after the script waiting for an
+      action by the user is timed out. Do not use the same tag in a different
+      group to avoid unexpected behavior.
+    required: false
+    advanced: true
+    example: example-notification-tag
+    selector:
+      text: {}
+  url:
+    name: URL
+    description: URL to open when clicking the notification.
+    required: false
+    advanced: true
+    example: /lovelace
+    selector:
+      text: {}
+  group:
+    name: Grouping
+    description: Combine notifications together visually.
+    required: false
+    advanced: true
+    example: example-notification-group
+    selector:
+      text: {}
+  confirm_text:
+    name: Title of the first action
+    description: Text to show on the button for the first action (e.g. 'Confirm').
+    selector:
+      text: {}
+  confirm_action:
+    selector:
+      action: {}
+    name: First Action
+    description: Action to run when the first button is pressed.
+  dismiss_text:
+    name: Title of the second action.
+    description: Text to show on the button for the first action (e.g. 'Dismiss').
+    selector:
+      text: {}
+  dismiss_action:
+    name: Second Action
+    description: Action to run when the second button is pressed.
+    selector:
+      action: {}
+  devices:
+    name: Device to notify
+    description: >-
+      Device needs to run the official Home Assistant app to receive
+      notifications. WARNING: Not recommended when using in automations or
+      scripts, since device ids have to be changed manually after a device is
+      changed. Device has to be selected as a device_tracker for a person to
+      send postponed messages.
+    required: false
+    selector:
+      device:
+        filter:
+          integration: mobile_app
+        multiple: true
+  shortcut:
+    selector:
+      text: {}
+    name: Shortcut (iOS only)
+    description: >-
+      You can trigger a Shortcut from Home Assistant using a notification by
+      specifying the name of the shortcut.
+    required: false
+    example: test shortcut
+  shortcut_kwargs:
+    selector:
+      object: {}
+    name: Shortcut Keyword-Arguments (iOS only)
+    description: >-
+      you can provide any number of keys and values. All values must be strings
+      (e.g. not numbers, arrays, dictionaries, etc.).
+    required: false
+    example: |
+      key1: val1
+      key2: val2
+sequence:
+  - condition: template
+    value_template: "{{ people is defined or devices is defined }}"
+  - variables:
+      users:
+        Me:
+          id: me
+          device_id: 123
+          os: iOS
+        Wife:
+          id: wife
+          device_id: 456
+          os: Android
+      targets: |
+        {% set ns = namespace(targets=[]) %} {% if people %}
+          {% for pers in people %}
+            {% if pers in users.keys() %}
+              {% set ns.targets = ns.targets + [users[pers]['device_id']] %}
+            {% endif %}
+          {% endfor %}
+        {% endif %} {% if devices %}
+          {% set ns.targets = ns.targets + devices %}
+        {% endif %}
+        {{ns.targets}}
+      postponed: |
+        {% if delivery_time == 'Notify people when they are getting home.' %}
+          True
+        {% else %}
+          False
+        {% endif %}
+      actionable: >
+        {% if (confirm_text and confirm_action) or (dismiss_text and
+        dismiss_action) %}
+          True
+        {% else %}
+          False
+        {% endif %}
+      raw_data:
+        title: "{{ title | default(None, true) }}"
+        subtitle: "{{ subtitle | default(None, true) }}"
+        message: "{{ message | default('', true) }}"
+        data: "{{ data | default({}) }}"
+        postponed: "{{ postponed | default(False, true) }}"
+        send_earliest: "{{ now() }}"
+        url: "{{ url | default(None, true) }}"
+        group: "{{ group | default(None, true) }}"
+        tag: "{{ tag | default(None, true) }}"
+        actionable: "{{ actionable | default(False, true) }}"
+        confirm_text: "{{ confirm_text if confirm_action else None | default(None, true) }}"
+        confirm_action: "{{ confirm_action if confirm_text else None | default(None, true) }}"
+        dismiss_text: "{{ dismiss_text if dismiss_action else None | default(None, true) }}"
+        dismiss_action: "{{ dismiss_action if dismiss_text else None | default(None, true) }}"
+        shortcut: "{{ shortcut | default(None, true) }}"
+        shortcut_kwargs: "{{ shortcut_kwargs | default(None, true) }}"
+  - repeat:
+      sequence:
+        - variables:
+            person: |
+              {% if repeat.item in devices %}
+                {% set device_tracker = device_entities(repeat.item) | select('match',
+                "device_tracker.") | list %}
+                {% for person in states.person %}
+                  {% if device_tracker[0] in person.attributes['device_trackers'] %}
+                    {{ person.attributes.id if 'person.' ~ person.attributes.id in (states.person | map(attribute='entity_id') | list) else None }}
+                  {% else %}
+                    {% for user in users %}
+                      {% if repeat.item in users[user].device_id %}
+                        {{ users[user].id if 'person.' ~ users[user].id in (states.person | map(attribute='entity_id') | list) else None }}
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                {% for user in users %}
+                  {% if repeat.item in users[user].device_id %}
+                    {{ users[user].id if 'person.' ~ users[user].id in (states.person | map(attribute='entity_id') | list) else None }}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ delivery_time == 'Request Location Update.'}}"
+                  alias: Request Location Update
+              sequence:
+                - action: >-
+                    notify.mobile_app_{{device_attr(repeat.item, 'name') |
+                    slugify }}
+                  data:
+                    message: request_location_update
+            - conditions: []
+              sequence:
+                - if:
+                    - condition: template
+                      value_template: "{{ tag is defined }}"
+                  then:
+                    - event: custom_notification_replacement_event
+                      event_data:
+                        tag: "{{ tag }}"
+                    - delay:
+                        hours: 0
+                        minutes: 0
+                        seconds: 1
+                - action: script.turn_on
+                  metadata: {}
+                  target:
+                    entity_id: script.parallel_notification_helper
+                  data:
+                    variables:
+                      target_device: "{{ repeat.item }}"
+                      raw_data: >-
+                        {{ dict({'person':person | default(None, true)},
+                        **raw_data) }}
+      for_each: "{{ targets }}"
+description: ""

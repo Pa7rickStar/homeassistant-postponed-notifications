@@ -1,0 +1,125 @@
+alias: Notify people when they are getting home
+description: ""
+triggers:
+  - entity_id: person.me
+    zone: zone.home
+    event: enter
+    id: Me
+    trigger: zone
+  - entity_id: person.wife
+    zone: zone.home
+    event: enter
+    id: Wife
+    trigger: zone
+  - trigger: state
+    entity_id:
+      - input_button.trigger_pending_notifications_delete
+    id: Delete Button
+  - trigger: state
+    entity_id:
+      - sensor.pending_notifications_when_away
+  - trigger: time_pattern
+    minutes: /30
+conditions: []
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - Delete Button
+        sequence:
+          - event: set_entity_value
+            event_data:
+              entity_id: sensor.pending_notifications_when_away
+              state: 0
+              attr:
+                list: []
+            enabled: true
+      - conditions:
+          - alias: Automation wasn't triggered within 5 minutes
+            condition: template
+            value_template: >-
+              {{ (as_timestamp(now()) -
+              as_timestamp(state_attr("automation.notify_people_when_they_are_getting_home",
+              "last_triggered"))) | int(0) > 600 }}
+          - condition: numeric_state
+            entity_id: sensor.pending_notifications_when_away
+            above: 0
+          - condition: state
+            entity_id: binary_sensor.home_jemand_zuhause
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.home_state_gast_modus
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.home_state_schlafen
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.home_state_nsdr
+            state: "off"
+        sequence:
+          - variables:
+              notifications: >-
+                {{ state_attr('sensor.pending_notifications_when_away', 'list')
+                | default([], true) }}
+              iterations: |
+                {{ notifications | length }}
+          - event: set_entity_value
+            event_data:
+              entity_id: sensor.pending_notifications_when_away
+              state: 0
+              attr:
+                list: []
+            enabled: true
+          - delay:
+              hours: 0
+              minutes: 0
+              seconds: 2
+            enabled: true
+          - repeat:
+              sequence:
+                - variables:
+                    index: "{{ repeat.index -1 }}"
+                    notification: "{{ notifications[index] }}"
+                - delay:
+                    hours: 0
+                    minutes: 0
+                    seconds: 15
+                  enabled: true
+                - if:
+                    - alias: Recipient is home and notification timeout has passed
+                      condition: template
+                      value_template: >-
+                        {{ is_state('person.' ~ notification.raw_data.person,
+                        'home') and notification.raw_data.send_earliest <= now()
+                        }}
+                      enabled: true
+                  then:
+                    - action: script.turn_on
+                      metadata: {}
+                      target:
+                        entity_id: script.parallel_notification_helper
+                      data:
+                        variables:
+                          target_device: "{{ notification.target_device }}"
+                          raw_data: "{{ notification.raw_data }}"
+                  else:
+                    - event: set_entity_value
+                      event_data:
+                        entity_id: sensor.pending_notifications_when_away
+                        state: >-
+                          {{
+                          ((state_attr('sensor.pending_notifications_when_away',
+                          'list') | default([], true)) + [notification]) |
+                          length }}
+                        attr:
+                          list: >-
+                            {{
+                            (state_attr('sensor.pending_notifications_when_away',
+                            'list') | default([], true)) + [notification] }}
+                      enabled: true
+                  enabled: true
+              until:
+                - condition: template
+                  value_template: "{{ repeat.index == iterations }}"
+mode: single
