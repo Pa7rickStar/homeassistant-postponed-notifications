@@ -2,6 +2,7 @@
 Home Assistant scripts and automations to postpone mobile phone notifications and deliver them when the recipient returns home. Also create advanced (e.g. actionable) notifications within the visual editor.
 
 ## Features
+- [x] Works with personalized notifications. For broadcasting style notifications (recipient is not predetermined but selected based on their location) something like [iq_notify](https://github.com/cadavre/iq_notify) might be a better solution.
 - [x] Change device information at only one location when people in your home change devices.
 - [ ] Create mobile app notifications in scripts and automations using the visual editor (without yaml):
   - [x] Basic notifications with `title`, `message` and `data`.
