@@ -42,20 +42,6 @@ fields:
     selector:
       text:
         multiline: true
-  data:
-    name: Data
-    description: >-
-      Required. Additional notification data. Defaults to {}. There are many
-      options not implemented in this script. See
-      https://companion.home-assistant.io/docs/notifications for information.
-      Some Android examples:- entityId:<entity_ID>- noAction (If you prefer to
-      not open the app by default and instead donothing.)- app://<package name>
-    required: true
-    advanced: true
-    example: "url: '/lovelace'"
-    default: {}
-    selector:
-      object: {}
   delivery_time:
     selector:
       select:
@@ -70,6 +56,18 @@ fields:
       Select when the notification should be send. If "Request Location Update"
       is selected, an update request without any message will be send
       immediately.
+  data:
+    name: Data
+    description: >-
+      Required. Additional notification data. Defaults to {}. There are many
+      options not implemented in this script. See
+      https://companion.home-assistant.io/docs/notifications for information.
+      Some Android examples:- entityId:<entity_ID>- noAction (If you prefer to
+      not open the app by default and instead donothing.)- app://<package name>
+    required: false
+    example: "url: '/lovelace'"
+    selector:
+      object: {}
   tag:
     name: Tag
     description: >-
@@ -87,7 +85,7 @@ fields:
       text: {}
   url:
     name: URL
-    description: URL to open when clicking the notification.
+    description: URL to open when clicking the notification (e.g. /lovelace).
     required: false
     advanced: true
     example: /lovelace
