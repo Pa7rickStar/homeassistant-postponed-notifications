@@ -44,8 +44,8 @@ sequence:
                 %}
                   Android
                 {% endif %}
-              title: "{{ raw_data.title | default(None, true) }}"
-              message: "{{ raw_data.message | default('', true) }}"
+              title: "{{ raw_data.title }}"
+              message: "{{ raw_data.message }}"
               subtitle: |
                 {% if raw_data.actionable %}
                   {{ '❓ Actionable: ' + raw_data.subtitle if raw_data.subtitle else '❓ Actionable' }}
@@ -124,13 +124,16 @@ sequence:
                 {% endif %}
 
                 {{data}}
+              data: |
+                {% set temp_data = {'message':message, 'data':msg_data} %}
+                {% if title %}
+                  {% set temp_data = dict({'title':title}, **temp_data) %}
+                {% endif %}
+                {{temp_data}}
           - action: >-
               notify.mobile_app_{{device_attr(target_device, 'name') | slugify
               }}
-            data:
-              title: "{{ title }}"
-              message: "{{ message }}"
-              data: "{{ msg_data }}"
+            data: "{{ data }}"
           - alias: Wait for trigger if notification is actionable
             if:
               - condition: template
