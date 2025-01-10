@@ -64,6 +64,13 @@ Home Assistant scripts and automations to postpone mobile phone notifications an
       - `input_boolean.home_state_gast_modus` is a helper so the `binary_sensor.home_jemand_zuhause` can set to `home` manually in case guests are staying at the house (without my wifes or mine phone present) and stuff like heating has to work.
       - `input_boolean.home_state_schlafen` and `input_boolean.home_state_nsdr` will be set automatically when someone is sleeping so shades and stuff don't move unexpectedly
 
+
+## TODOs:
+- [ ] Add option for automatic actions `Remind me later`, `Remind me tomorrow` and `Remind me at home` instead of always adding them.
+- [ ] Implement Android specific Notification Cleared.
+- [ ] Add URL-Selector for lovelace pages.
+
+
 ## Credits
 This project was inspired by [Simon42](https://www.simon42.com/home-assistant-zu-hause-benachrichtigen/). The scripts and ideas are heavily based on [Pending / Postponed notifications](https://community.home-assistant.io/t/pending-postponed-notifications/363234) by [RoboMagus](https://gist.github.com/RoboMagus/).
 
